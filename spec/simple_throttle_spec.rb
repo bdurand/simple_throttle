@@ -37,6 +37,7 @@ describe SimpleThrottle do
     expect(throttle.allowed!).to eq false
     sleep(0.3)
     expect(throttle.allowed!).to eq true
+    expect(throttle.allowed!).to eq false
   end
   
   it "should be able to add global throttles" do
