@@ -9,7 +9,7 @@ Gem::Specification.new do |spec|
   spec.email         = ["dev@weheartit.com", "bbdurand@gmail.com"]
   spec.summary       = "Simple redis backed throttling mechanism to limit access to a resource"
   spec.description   = "Simple redis backed throttling mechanism to limit access to a resource."
-  spec.homepage      = "https://github.com/weheartit/sidekiq_fast_enq"
+  spec.homepage      = "https://github.com/weheartit/simple_throttle"
   spec.license       = "MIT"
 
   spec.files         = `git ls-files`.split($/)

@@ -1,14 +1,19 @@
 require 'redis'
+require 'thread'
 
 # Create a simple throttle that can be used to limit the number of request for a resouce
 # per time period. These objects are thread safe.
 class SimpleThrottle
   
+  @@lock = Mutex.new
+  
   class << self
-    # Add a new throttle that can be referenced later with the [] method.
+    # Add a global throttle that can be referenced later with the [] method.
     def add(name, limit:, ttl:)
-      @throttles ||= {} 
-      @throttles[name.to_s] = new(name, limit: limit, ttl: ttl)       
+      @@lock.synchronize do
+        @throttles ||= {} 
+        @throttles[name.to_s] = new(name, limit: limit, ttl: ttl)     
+      end  
     end
     
     # Returns a globally defined throttle with the specfied name.
