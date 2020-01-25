@@ -3,5 +3,8 @@ language: ruby
 rvm:
   - "2.6"
 
+services:
+  - redis-server
+
 gemfile:
   - Gemfile
