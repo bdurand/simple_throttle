@@ -44,7 +44,5 @@ jobs:
         uses: paambaati/codeclimate-action@v2.7.5
         env:
           CC_TEST_REPORTER_ID: 95bb5a1721abab90f03e8b3356ee35acf427a7748b9d3bbad70a3bad62ea860a
-        with:
-          debug: true
       - name: standardrb
         run:  bundle exec rake standard
