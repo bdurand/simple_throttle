@@ -39,10 +39,12 @@ jobs:
         run: |
           bundle update
       - name: specs
+        run:  bundle exec rake spec
+      - name: code coverage
         uses: paambaati/codeclimate-action@v2.7.5
         env:
-          CC_TEST_REPORTER_ID: 5a05583e3035b426c444a47f96562b42bfff00a8a6630c0d7257f141f3b24a9d
+          CC_TEST_REPORTER_ID: 95bb5a1721abab90f03e8b3356ee35acf427a7748b9d3bbad70a3bad62ea860a
         with:
-          coverageCommand: bundle exec rake spec
+          debug: true
       - name: standardrb
         run:  bundle exec rake standard
