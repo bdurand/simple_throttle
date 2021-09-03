@@ -1,0 +1,50 @@
+name: Continuous Integration
+on:
+  push:
+    branches:
+      - master
+      - actions-*
+    tags:
+      - v*
+  pull_request:
+env:
+  BUNDLE_CLEAN: "true"
+  BUNDLE_PATH: vendor/bundle
+  BUNDLE_JOBS: 3
+  BUNDLE_RETRY: 3
+jobs:
+  specs:
+    name: ${{ matrix.job }} ruby-${{ matrix.combo.ruby || matrix.ruby }}
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    strategy:
+      fail-fast: false
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+      - name: set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: 2.7
+      - name: setup bundler
+        run: |
+          bundle update
+      - name: specs
+        run:  bundle exec rake spec
+      - name: code coverage
+        uses: paambaati/codeclimate-action@v2.7.5
+        env:
+          CC_TEST_REPORTER_ID: 5a05583e3035b426c444a47f96562b42bfff00a8a6630c0d7257f141f3b24a9d
+        with:
+          coverageCommand: bundle exec rake spec
+      - name: standardrb
+        run:  bundle exec rake standard
