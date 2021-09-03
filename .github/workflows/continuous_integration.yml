@@ -40,7 +40,7 @@ jobs:
         run: |
           bundle update
       - name: specs
-        run:  bundle exec rake spec
+        run:  bundle exec rake spec || ls -l || ls -l coverage/
       - name: code coverage
         uses: paambaati/codeclimate-action@v2.7.5
         with:
