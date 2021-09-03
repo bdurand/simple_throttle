@@ -6,7 +6,6 @@ require "bundler/setup" if File.exist?(ENV["BUNDLE_GEMFILE"])
 
 begin
   require "simplecov"
-  require 'simplecov-json'
   SimpleCov.start do
     add_filter ["/spec/"]
   end
