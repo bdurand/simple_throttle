@@ -56,11 +56,11 @@ describe SimpleThrottle do
   end
 
   it "should be able to specify the Redis client with a block so it is gotten at runtime" do
-    SimpleThrottle.add(:test_1, limit: 4, ttl: 60, redis: lambda { Redis.new })
-    SimpleThrottle["test_1"].reset!
-    expect(SimpleThrottle["test_1"].peek).to eq 0
+    SimpleThrottle.add(:test_3, limit: 4, ttl: 60, redis: lambda { Redis.new })
+    SimpleThrottle[:test_3].reset!
+    expect(SimpleThrottle[:test_3].peek).to eq 0
 
-    throttle = SimpleThrottle.new(:test_1, limit: 4, ttl: 60, redis: lambda { Redis.new })
-    expect(SimpleThrottle["test_1"].peek).to eq 0
+    throttle = SimpleThrottle.new(:test_3, limit: 4, ttl: 60, redis: lambda { Redis.new })
+    expect(throttle.peek).to eq 0
   end
 end
