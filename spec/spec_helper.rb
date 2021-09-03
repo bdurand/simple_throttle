@@ -10,10 +10,6 @@ begin
   SimpleCov.start do
     add_filter ["/spec/"]
   end
-  SimpleCov.formatter = SimpleCov::Formatter::MultiFormatter.new([
-    SimpleCov::Formatter::HTMLFormatter,
-    SimpleCov::Formatter::JSONFormatter,
-  ])
 rescue LoadError
 end
 
