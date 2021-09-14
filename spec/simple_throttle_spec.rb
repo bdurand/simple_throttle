@@ -63,4 +63,15 @@ describe SimpleThrottle do
     throttle = SimpleThrottle.new(:test_3, limit: 4, ttl: 60, redis: lambda { Redis.new })
     expect(throttle.peek).to eq 0
   end
+
+  it "should work with floats" do
+    throttle = SimpleThrottle.new("test_simple_throttle", limit: 3.8888888888888, ttl: 0.1111111111111111)
+    throttle.reset!
+    expect(throttle.allowed!).to eq true
+    expect(throttle.allowed!).to eq true
+    expect(throttle.allowed!).to eq true
+    expect(throttle.allowed!).to eq false
+    sleep(1)
+    expect(throttle.allowed!).to eq true
+  end
 end

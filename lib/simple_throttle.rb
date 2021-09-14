@@ -101,8 +101,8 @@ class SimpleThrottle
   def initialize(name, ttl:, limit:, redis: nil)
     @name = name.to_s
     @name = name.dup.freeze unless name.frozen?
-    @limit = limit
-    @ttl = ttl
+    @limit = limit.to_i
+    @ttl = ttl.to_f
     @redis = redis
   end
 
@@ -152,7 +152,7 @@ class SimpleThrottle
   def current_size(push)
     push_arg = (push ? 1 : 0)
     time_ms = (Time.now.to_f * 1000).round
-    ttl_ms = ttl * 1000
+    ttl_ms = (ttl * 1000).ceil
     self.class.send(:execute_lua_script, redis: redis_client, keys: [redis_key], args: [limit, ttl_ms, time_ms, push_arg])
   end
 
