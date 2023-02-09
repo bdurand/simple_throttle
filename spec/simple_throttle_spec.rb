@@ -20,9 +20,10 @@ describe SimpleThrottle do
     expect(throttle.peek).to eq 3
     expect(throttle.allowed!).to eq false
     expect(throttle.peek).to eq 3
-    wait_time = throttle.wait_time
-    expect(wait_time).to be > 0.0
-    expect(wait_time).to be <= 1.0
+    earlier_wait_time = throttle.wait_time
+    expect(earlier_wait_time).to be > 0.0
+    expect(earlier_wait_time).to be <= throttle.ttl
+    expect(earlier_wait_time).to be > throttle.wait_time
 
     expect(other_throttle.allowed!).to eq true
     expect(other_throttle.peek).to eq 1
