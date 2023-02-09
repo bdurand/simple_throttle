@@ -60,7 +60,7 @@ $ gem install simple_throttle
 
 ## Contributing
 
-Open a pull request on GitHub.
+Fork the repository and open a pull request on GitHub.
 
 Please use the [standardrb](https://github.com/testdouble/standard) syntax and lint your code with `standardrb --fix` before submitting.
 
