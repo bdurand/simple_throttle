@@ -133,7 +133,7 @@ class SimpleThrottle
       first = redis_client.lindex(redis_key, 0).to_f / 1000.0
       delta = Time.now.to_f - first
       delta = 0.0 if delta < 0
-      delta
+      ttl - delta
     end
   end
 
