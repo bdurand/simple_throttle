@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require "redis"
+
 # Create a simple throttle that can be used to limit the number of request for a resouce
 # per time period. These objects are thread safe.
 class SimpleThrottle
@@ -41,7 +42,15 @@ class SimpleThrottle
 
   class << self
     # Add a global throttle that can be referenced later with the [] method.
-    def add(name, limit:, ttl:, redis: nil)
+    # This can be used to configure global throttles that you want to setup once
+    # and then use in multiple places.
+    #
+    # @param name [String] unique name for the throttle
+    # @param ttl [Numeric] number of seconds that the throttle will remain active
+    # @param limit [Integer] number of allowed requests within the throttle ttl
+    # @param redis [Redis, Proc] Redis instance to use or a Proc that yields a Redos instance
+    # @return [void]
+    def add(name, ttl:, limit:, redis: nil)
       @lock.synchronize do
         @throttles ||= {}
         @throttles[name.to_s] = new(name, limit: limit, ttl: ttl, redis: redis)
@@ -49,6 +58,9 @@ class SimpleThrottle
     end
 
     # Returns a globally defined throttle with the specfied name.
+    #
+    # @param name [String, Symbol] name of the throttle
+    # @return [SimpleThrottle]
     def [](name)
       if defined?(@throttles) && @throttles
         @throttles[name.to_s]
@@ -60,11 +72,17 @@ class SimpleThrottle
     # it will be invoked at runtime to get the instance. Use this method if your Redis instance
     # isn't constant (for example if you're in a forking environment and re-initialize connections
     # on fork)
+    #
+    # @param client [Redis, Proc]
+    # @yieldreturn [Redis]
+    # @return [void]
     def set_redis(client = nil, &block)
       @redis_client = (client || block)
     end
 
     # Return the Redis instance where the throttles are stored.
+    #
+    # @return [Redis]
     def redis
       @redis_client ||= Redis.new
       if @redis_client.is_a?(Proc)
@@ -93,11 +111,12 @@ class SimpleThrottle
 
   attr_reader :name, :limit, :ttl
 
-  # Create a new throttle
+  # Create a new throttle.
+  #
   # @param name [String] unique name for the throttle
   # @param ttl [Numeric] number of seconds that the throttle will remain active
   # @param limit [Integer] number of allowed requests within the throttle ttl
-  # @param redis [Redis] Redis client to use
+  # @param redis [Redis, Proc] Redis instance to use or a Proc that yields a Redos instance
   def initialize(name, ttl:, limit:, redis: nil)
     @name = name.to_s
     @name = name.dup.freeze unless name.frozen?
@@ -108,17 +127,23 @@ class SimpleThrottle
 
   # Returns true if the limit for the throttle has not been reached yet. This method
   # will also track the throttled resource as having been invoked on each call.
+  #
+  # @return [Boolean]
   def allowed!
     size = current_size(true)
     size < limit
   end
 
   # Reset a throttle back to zero.
+  #
+  # @return [void]
   def reset!
     redis_client.del(redis_key)
   end
 
   # Peek at the current number for throttled calls being tracked.
+  #
+  # @return [Integer]
   def peek
     current_size(false)
   end
@@ -126,6 +151,8 @@ class SimpleThrottle
   # Returns when the next resource call should be allowed. Note that this doesn't guarantee that
   # calling allow! will return true if the wait time is zero since other processes or threads can
   # claim the resource.
+  #
+  # @return [Float]
   def wait_time
     if peek < limit
       0.0
