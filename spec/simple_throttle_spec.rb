@@ -76,4 +76,3 @@ describe SimpleThrottle do
     expect(throttle.allowed!).to eq true
   end
 end
-
