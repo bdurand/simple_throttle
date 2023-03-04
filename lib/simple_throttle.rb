@@ -95,12 +95,16 @@ class SimpleThrottle
     private
 
     def execute_lua_script(redis:, keys:, args:)
-      @script_sha_1 ||= redis.script(:load, LUA_SCRIPT)
+      client = redis
+      @script_sha_1 ||= client.script(:load, LUA_SCRIPT)
+      attempts = 0
+
       begin
-        redis.evalsha(@script_sha_1, Array(keys), Array(args))
+        client.evalsha(@script_sha_1, Array(keys), Array(args))
       rescue Redis::CommandError => e
-        if e.message.include?("NOSCRIPT")
-          @script_sha_1 = redis.script(:load, LUA_SCRIPT)
+        if e.message.include?("NOSCRIPT") && attempts < 2
+          @script_sha_1 = client.script(:load, LUA_SCRIPT)
+          attempts += 1
           retry
         else
           raise e

@@ -75,4 +75,24 @@ describe SimpleThrottle do
     sleep(1)
     expect(throttle.allowed!).to eq true
   end
+
+  it "should deny all requests when the limit is zero" do
+    throttle = SimpleThrottle.new("test_simple_throttle", limit: 0, ttl: 10)
+    throttle.reset!
+    expect(throttle.allowed!).to eq false
+  end
+
+  it "should deny all requests when the limit is less than zero" do
+    throttle = SimpleThrottle.new("test_simple_throttle", limit: -1, ttl: 10)
+    throttle.reset!
+    expect(throttle.allowed!).to eq false
+  end
+
+  it "should handle the lua script being unloaded by the server" do
+    redis = Redis.new
+    throttle = SimpleThrottle.new("test_simple_throttle", limit: 3, ttl: 10, redis: redis)
+    expect(redis).to receive(:evalsha).and_raise(Redis::CommandError.new("NOSCRIPT"))
+    expect(redis).to receive(:evalsha).and_call_original
+    expect(throttle.allowed!).to eq true
+  end
 end
