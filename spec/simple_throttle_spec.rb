@@ -43,6 +43,32 @@ describe SimpleThrottle do
     expect(throttle.allowed!).to eq false
   end
 
+  it "should track an extra call if pause to recover is set" do
+    throttle = SimpleThrottle.new("test_simple_throttle", limit: 3, ttl: 1, pause_to_recover: true)
+    throttle.reset!
+
+    expect(throttle.peek).to eq 0
+    expect(throttle.allowed!).to eq true
+    sleep(0.2)
+    expect(throttle.allowed!).to eq true
+    sleep(0.2)
+    expect(throttle.allowed!).to eq true
+    sleep(0.2)
+    expect(throttle.allowed!).to eq false
+    expect(throttle.peek).to eq 4
+    sleep(0.2)
+    expect(throttle.allowed!).to eq false
+    expect(throttle.peek).to eq 4
+    sleep(0.2)
+    expect(throttle.allowed!).to eq false
+    expect(throttle.peek).to eq 4
+    sleep(0.2)
+    expect(throttle.allowed!).to eq false
+    expect(throttle.peek).to eq 4
+    sleep(0.4)
+    expect(throttle.allowed!).to eq true
+  end
+
   it "should be able to add global throttles" do
     SimpleThrottle.add(:test_1, limit: 4, ttl: 60)
     SimpleThrottle.add(:test_2, limit: 10, ttl: 3600, redis: Redis.new)
