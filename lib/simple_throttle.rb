@@ -16,6 +16,7 @@ class SimpleThrottle
     local ttl = tonumber(ARGV[2])
     local now = ARGV[3]
     local push = tonumber(ARGV[4])
+    local pause_to_recover = tonumber(ARGV[5])
 
     local size = redis.call('llen', list_key)
     if size >= limit then
@@ -30,7 +31,7 @@ class SimpleThrottle
       end
     end
 
-    if push > 0 and size < limit then
+    if push > 0 and (size < limit or (size == limit and pause_to_recover > 0)) then
       redis.call('rpush', list_key, now)
       redis.call('pexpire', list_key, ttl)
     end
@@ -48,12 +49,15 @@ class SimpleThrottle
     # @param name [String] unique name for the throttle
     # @param ttl [Numeric] number of seconds that the throttle will remain active
     # @param limit [Integer] number of allowed requests within the throttle ttl
+    # @param pause_to_recover [Boolean] require processes calling the throttle
+    #   to pause at least temporarily before freeing up the throttle. If this is true,
+    #   then a throttle called constantly with no pauses will never free up.
     # @param redis [Redis, Proc] Redis instance to use or a Proc that yields a Redos instance
     # @return [void]
-    def add(name, ttl:, limit:, redis: nil)
+    def add(name, ttl:, limit:, pause_to_recover: false, redis: nil)
       @lock.synchronize do
         @throttles ||= {}
-        @throttles[name.to_s] = new(name, limit: limit, ttl: ttl, redis: redis)
+        @throttles[name.to_s] = new(name, limit: limit, ttl: ttl, pause_to_recover: pause_to_recover, redis: redis)
       end
     end
 
@@ -120,12 +124,16 @@ class SimpleThrottle
   # @param name [String] unique name for the throttle
   # @param ttl [Numeric] number of seconds that the throttle will remain active
   # @param limit [Integer] number of allowed requests within the throttle ttl
+  # @param pause_to_recover [Boolean] require processes calling the throttle
+  #   to pause at least temporarily before freeing up the throttle. If this is true,
+  #   then a throttle called constantly with no pauses will never free up.
   # @param redis [Redis, Proc] Redis instance to use or a Proc that yields a Redos instance
-  def initialize(name, ttl:, limit:, redis: nil)
+  def initialize(name, ttl:, limit:, pause_to_recover: false, redis: nil)
     @name = name.to_s
     @name = name.dup.freeze unless name.frozen?
     @limit = limit.to_i
     @ttl = ttl.to_f
+    @pause_to_recover = !!pause_to_recover
     @redis = redis
   end
 
@@ -182,9 +190,10 @@ class SimpleThrottle
   # If push is set to true then a new item will be added to the list.
   def current_size(push)
     push_arg = (push ? 1 : 0)
+    pause_to_recover_arg = (@pause_to_recover ? 1 : 0)
     time_ms = (Time.now.to_f * 1000).round
     ttl_ms = (ttl * 1000).ceil
-    self.class.send(:execute_lua_script, redis: redis_client, keys: [redis_key], args: [limit, ttl_ms, time_ms, push_arg])
+    self.class.send(:execute_lua_script, redis: redis_client, keys: [redis_key], args: [limit, ttl_ms, time_ms, push_arg, pause_to_recover_arg])
   end
 
   def redis_key
