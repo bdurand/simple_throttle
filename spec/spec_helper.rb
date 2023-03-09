@@ -16,10 +16,17 @@ Bundler.require(:default, :test)
 
 require_relative "../lib/simple_throttle"
 
+redis = Redis.new
+SimpleThrottle.set_redis(redis)
+
 RSpec.configure do |config|
   config.expect_with :rspec do |c|
     c.syntax = :expect
   end
 
   config.order = :random
+
+  config.before do
+    redis.flushdb
+  end
 end

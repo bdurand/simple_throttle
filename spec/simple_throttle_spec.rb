@@ -5,9 +5,7 @@ require_relative "spec_helper"
 describe SimpleThrottle do
   it "should tell if a call is allowed" do
     throttle = SimpleThrottle.new("test_simple_throttle", limit: 3, ttl: 1)
-    throttle.reset!
     other_throttle = SimpleThrottle.new("test_simple_throttle_2", limit: 3, ttl: 1, redis: Redis.new)
-    other_throttle.reset!
 
     expect(throttle.peek).to eq 0
     expect(throttle.allowed!).to eq true
@@ -45,7 +43,6 @@ describe SimpleThrottle do
 
   it "should track an extra call if pause to recover is set" do
     throttle = SimpleThrottle.new("test_simple_throttle", limit: 3, ttl: 1, pause_to_recover: true)
-    throttle.reset!
 
     expect(throttle.peek).to eq 0
     expect(throttle.allowed!).to eq true
@@ -93,7 +90,6 @@ describe SimpleThrottle do
 
   it "should work with floats" do
     throttle = SimpleThrottle.new("test_simple_throttle", limit: 3.8888888888888, ttl: 0.1111111111111111)
-    throttle.reset!
     expect(throttle.allowed!).to eq true
     expect(throttle.allowed!).to eq true
     expect(throttle.allowed!).to eq true
@@ -104,13 +100,11 @@ describe SimpleThrottle do
 
   it "should deny all requests when the limit is zero" do
     throttle = SimpleThrottle.new("test_simple_throttle", limit: 0, ttl: 10)
-    throttle.reset!
     expect(throttle.allowed!).to eq false
   end
 
   it "should deny all requests when the limit is less than zero" do
     throttle = SimpleThrottle.new("test_simple_throttle", limit: -1, ttl: 10)
-    throttle.reset!
     expect(throttle.allowed!).to eq false
   end
 
