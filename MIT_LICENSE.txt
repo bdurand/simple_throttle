@@ -1,4 +1,4 @@
-Copyright (c) 2016 WHI, Inc.
+Copyright (c) 2016 Brian Durand
 
 MIT License
 

@@ -1,11 +1,11 @@
 Gem::Specification.new do |spec|
   spec.name = "simple_throttle"
   spec.version = File.read(File.expand_path("../VERSION", __FILE__)).strip
-  spec.authors = ["We Heart It", "Brian Durand"]
-  spec.email = ["dev@weheartit.com", "bbdurand@gmail.com"]
+  spec.authors = ["Brian Durand"]
+  spec.email = ["bbdurand@gmail.com"]
 
   spec.summary = "Simple redis backed throttling mechanism to limit access to a resource"
-  spec.homepage = "https://github.com/weheartit/simple_throttle"
+  spec.homepage = "https://github.com/bdurand/simple_throttle"
   spec.license = "MIT"
 
   # Specify which files should be added to the gem when it is released.
