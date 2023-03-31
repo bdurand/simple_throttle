@@ -1,4 +1,3 @@
-[![Maintainability](https://api.codeclimate.com/v1/badges/0535eef45908cc64b740/maintainability)](https://codeclimate.com/github/weheartit/simple_throttle/maintainability)
 [![Ruby Style Guide](https://img.shields.io/badge/code_style-standard-brightgreen.svg)](https://github.com/testdouble/standard)
 
 This gem provides a very simple throttling mechanism backed by Redis for limiting access to a resource. The throttle can be thought of as a limit on the number of calls in a set time frame (i.e. 100 calls per hour).
