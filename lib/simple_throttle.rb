@@ -157,7 +157,9 @@ class SimpleThrottle
   #
   # @return [Integer]
   def peek
-    current_size(false)
+    timestamps = redis_client.lrange(redis_key, 0, -1).collect(&:to_i)
+    min_timestamp = ((Time.now.to_f - ttl) * 1000).ceil
+    timestamps.count { |t| t > min_timestamp }
   end
 
   # Returns when the next resource call should be allowed. Note that this doesn't guarantee that

@@ -29,6 +29,7 @@ describe SimpleThrottle do
 
     sleep(1.1)
 
+    expect(other_throttle.peek).to eq 0
     expect(throttle.allowed!).to eq true
     sleep(0.3)
     expect(throttle.allowed!).to eq true
@@ -37,8 +38,10 @@ describe SimpleThrottle do
     sleep(0.3)
     expect(throttle.allowed!).to eq false
     sleep(0.3)
+    expect(throttle.peek).to eq 2
     expect(throttle.allowed!).to eq true
     expect(throttle.allowed!).to eq false
+    expect(throttle.peek).to eq 3
   end
 
   it "should track an extra call if pause to recover is set" do
