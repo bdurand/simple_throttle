@@ -1,3 +1,7 @@
+# Simple Throttle
+
+[![Continuous Integration](https://github.com/bdurand/simple_throttle/actions/workflows/continuous_integration.yml/badge.svg)](https://github.com/bdurand/simple_throttle/actions/workflows/continuous_integration.yml)
+[![Regression Test](https://github.com/bdurand/simple_throttle/actions/workflows/regression_test.yml/badge.svg)](https://github.com/bdurand/simple_throttle/actions/workflows/regression_test.yml)
 [![Ruby Style Guide](https://img.shields.io/badge/code_style-standard-brightgreen.svg)](https://github.com/testdouble/standard)
 
 This gem provides a very simple throttling mechanism backed by Redis for limiting access to a resource. The throttle can be thought of as a limit on the number of calls in a set time frame (i.e. 100 calls per hour).
