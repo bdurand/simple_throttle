@@ -15,8 +15,8 @@ class SimpleThrottle
     local limit = tonumber(ARGV[1])
     local ttl = tonumber(ARGV[2])
     local now = ARGV[3]
-    local push = tonumber(ARGV[4])
-    local pause_to_recover = tonumber(ARGV[5])
+    local pause_to_recover = tonumber(ARGV[4])
+    local amount = tonumber(ARGV[5])
 
     local size = redis.call('llen', list_key)
     if size >= limit then
@@ -31,12 +31,22 @@ class SimpleThrottle
       end
     end
 
-    if push > 0 and (size < limit or (size == limit and pause_to_recover > 0)) then
-      redis.call('rpush', list_key, now)
+    if pause_to_recover > 0 then
+      limit = limit + 1
+    end
+
+    if size + amount > limit then
+      amount = (limit - size) + 1
+    end
+
+    if size < limit then
+      for i = 1, amount do
+        redis.call('rpush', list_key, now)
+      end
       redis.call('pexpire', list_key, ttl)
     end
 
-    return size
+    return size + amount
   LUA
 
   @lock = Mutex.new
@@ -81,7 +91,7 @@ class SimpleThrottle
     # @yieldreturn [Redis]
     # @return [void]
     def set_redis(client = nil, &block)
-      @redis_client = (client || block)
+      @redis_client = (client || block) # rubocop:disable Style/RedundantParentheses
     end
 
     # Return the Redis instance where the throttles are stored.
@@ -142,8 +152,26 @@ class SimpleThrottle
   #
   # @return [Boolean]
   def allowed!
-    size = current_size(true)
-    size < limit
+    size = increment!
+    size <= limit
+  end
+
+  # Increment the throttle by the specified and return the current size. Because
+  # how the throttle is implemented in Redis, the return value will always max
+  # out at the throttle limit + 1 or, if the pause to recover option is set, limit + 2.
+  #
+  # @param amount [Integer] amount to increment the throttle by
+  # @return [Integer]
+  def increment!(amount = 1)
+    pause_to_recover_arg = (@pause_to_recover ? 1 : 0)
+    time_ms = (Time.now.to_f * 1000).round
+    ttl_ms = (ttl * 1000).ceil
+    self.class.send(
+      :execute_lua_script,
+      redis: redis_client,
+      keys: [redis_key],
+      args: [limit, ttl_ms, time_ms, pause_to_recover_arg, amount]
+    )
   end
 
   # Reset a throttle back to zero.
@@ -186,16 +214,6 @@ class SimpleThrottle
     else
       @redis || self.class.redis
     end
-  end
-
-  # Evaluate and execute a Lua script on the redis server that returns the number calls currently being tracked.
-  # If push is set to true then a new item will be added to the list.
-  def current_size(push)
-    push_arg = (push ? 1 : 0)
-    pause_to_recover_arg = (@pause_to_recover ? 1 : 0)
-    time_ms = (Time.now.to_f * 1000).round
-    ttl_ms = (ttl * 1000).ceil
-    self.class.send(:execute_lua_script, redis: redis_client, keys: [redis_key], args: [limit, ttl_ms, time_ms, push_arg, pause_to_recover_arg])
   end
 
   def redis_key

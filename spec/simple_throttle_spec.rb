@@ -4,8 +4,8 @@ require_relative "spec_helper"
 
 describe SimpleThrottle do
   it "should tell if a call is allowed" do
-    throttle = SimpleThrottle.new("test_simple_throttle", limit: 3, ttl: 1)
-    other_throttle = SimpleThrottle.new("test_simple_throttle_2", limit: 3, ttl: 1, redis: Redis.new)
+    throttle = SimpleThrottle.new("test_simple_throttle", limit: 3, ttl: 0.2)
+    other_throttle = SimpleThrottle.new("test_simple_throttle_2", limit: 3, ttl: 0.1, redis: Redis.new)
 
     expect(throttle.peek).to eq 0
     expect(throttle.allowed!).to eq true
@@ -27,45 +27,63 @@ describe SimpleThrottle do
     expect(other_throttle.peek).to eq 1
     expect(other_throttle.wait_time).to eq 0.0
 
-    sleep(1.1)
+    sleep(0.3)
 
     expect(other_throttle.peek).to eq 0
     expect(throttle.allowed!).to eq true
-    sleep(0.3)
+    sleep(0.06)
     expect(throttle.allowed!).to eq true
-    sleep(0.3)
+    sleep(0.06)
     expect(throttle.allowed!).to eq true
-    sleep(0.3)
+    sleep(0.06)
     expect(throttle.allowed!).to eq false
-    sleep(0.3)
+    sleep(0.06)
     expect(throttle.peek).to eq 2
     expect(throttle.allowed!).to eq true
     expect(throttle.allowed!).to eq false
     expect(throttle.peek).to eq 3
   end
 
+  it "should increment the throttle" do
+    throttle = SimpleThrottle.new("test_simple_throttle", limit: 3, ttl: 0.2)
+
+    expect(throttle.peek).to eq 0
+    expect(throttle.increment!).to eq 1
+    expect(throttle.increment!).to eq 2
+    expect(throttle.increment!).to eq 3
+    expect(throttle.increment!).to eq 4
+    expect(throttle.increment!).to eq 4
+    expect(throttle.peek).to eq 3
+    sleep(0.25)
+    expect(throttle.peek).to eq 0
+    expect(throttle.increment!).to eq 1
+    expect(throttle.increment!(2)).to eq 3
+    expect(throttle.increment!(2)).to eq 4
+    expect(throttle.peek).to eq 3
+  end
+
   it "should track an extra call if pause to recover is set" do
-    throttle = SimpleThrottle.new("test_simple_throttle", limit: 3, ttl: 1, pause_to_recover: true)
+    throttle = SimpleThrottle.new("test_simple_throttle", limit: 3, ttl: 0.1, pause_to_recover: true)
 
     expect(throttle.peek).to eq 0
     expect(throttle.allowed!).to eq true
-    sleep(0.2)
+    sleep(0.02)
     expect(throttle.allowed!).to eq true
-    sleep(0.2)
+    sleep(0.02)
     expect(throttle.allowed!).to eq true
-    sleep(0.2)
+    sleep(0.02)
     expect(throttle.allowed!).to eq false
     expect(throttle.peek).to eq 4
-    sleep(0.2)
+    sleep(0.02)
     expect(throttle.allowed!).to eq false
     expect(throttle.peek).to eq 4
-    sleep(0.2)
+    sleep(0.02)
     expect(throttle.allowed!).to eq false
     expect(throttle.peek).to eq 4
-    sleep(0.2)
+    sleep(0.02)
     expect(throttle.allowed!).to eq false
     expect(throttle.peek).to eq 4
-    sleep(0.4)
+    sleep(0.04)
     expect(throttle.allowed!).to eq true
   end
 
@@ -97,7 +115,7 @@ describe SimpleThrottle do
     expect(throttle.allowed!).to eq true
     expect(throttle.allowed!).to eq true
     expect(throttle.allowed!).to eq false
-    sleep(1)
+    sleep(0.2)
     expect(throttle.allowed!).to eq true
   end
 
