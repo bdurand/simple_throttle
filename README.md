@@ -41,6 +41,17 @@ Calling `allowed!` will return `true` if the throttle limit has not yet been rea
 
 The throttle data is kept in redis as a list of timestamps and will be auto expired if it falls out of use. The thottles time windows are rolling time windows and more calls will be allowed as soon as possible. So, if you have a throttle of, 100 requests per hour, and the throttle kicks in, you will be able to make the next throttled call one hour after the first call being tracked, not one hour after the last call.
 
+You can also increment the throttle yourself with the `increment!` method. This will increment the throttle by the given amount and return the current count. The count will be capped by the throttle limit since excess requests beyond the limit are not tracked in Redis for performance reasons.
+
+```ruby
+count = throttle.increment!
+if count <= throttle.limit
+  do_something
+else
+  raise "Too many requests: #{count}"
+end
+```
+
 ### Pause to recover option
 
 Throttles can also specify a `pause_to_recover` option set when they are created. When this flag is set, once a throttle check fails, it will continue to fail until the rate at which it is called drops below the maximum rate allowed by the throttle. This is designed for use where you want to detect run away processes constantly hitting a service. Without this set, the process would be able to utilize the resource up to the set limit. With it set, the process would need to pause temporarily to succeed again.
