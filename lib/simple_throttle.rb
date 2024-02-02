@@ -17,9 +17,10 @@ class SimpleThrottle
     local now = ARGV[3]
     local pause_to_recover = tonumber(ARGV[4])
     local amount = tonumber(ARGV[5])
+    local cleanup = tonumber(ARGV[6])
 
     local size = redis.call('llen', list_key)
-    if size >= limit then
+    if size >= limit or (cleanup > 0 and size > 0) then
       local expired = tonumber(now) - ttl
       while size > 0 do
         local t = redis.call('lpop', list_key)
@@ -152,7 +153,7 @@ class SimpleThrottle
   #
   # @return [Boolean]
   def allowed!
-    size = increment!
+    size = add_request(1, false)
     size <= limit
   end
 
@@ -163,15 +164,7 @@ class SimpleThrottle
   # @param amount [Integer] amount to increment the throttle by
   # @return [Integer]
   def increment!(amount = 1)
-    pause_to_recover_arg = (@pause_to_recover ? 1 : 0)
-    time_ms = (Time.now.to_f * 1000).round
-    ttl_ms = (ttl * 1000).ceil
-    self.class.send(
-      :execute_lua_script,
-      redis: redis_client,
-      keys: [redis_key],
-      args: [limit, ttl_ms, time_ms, pause_to_recover_arg, amount]
-    )
+    add_request(amount, true)
   end
 
   # Reset a throttle back to zero.
@@ -218,5 +211,17 @@ class SimpleThrottle
 
   def redis_key
     "simple_throttle.#{name}"
+  end
+
+  def add_request(amount, cleanup)
+    pause_to_recover_arg = (@pause_to_recover ? 1 : 0)
+    time_ms = (Time.now.to_f * 1000).round
+    ttl_ms = (ttl * 1000).ceil
+    self.class.send(
+      :execute_lua_script,
+      redis: redis_client,
+      keys: [redis_key],
+      args: [limit, ttl_ms, time_ms, pause_to_recover_arg, amount, (cleanup ? 1 : 0)]
+    )
   end
 end

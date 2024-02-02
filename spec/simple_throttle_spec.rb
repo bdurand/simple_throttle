@@ -45,21 +45,26 @@ describe SimpleThrottle do
   end
 
   it "should increment the throttle" do
-    throttle = SimpleThrottle.new("test_simple_throttle", limit: 3, ttl: 0.2)
+    throttle = SimpleThrottle.new("test_simple_throttle", limit: 5, ttl: 0.2)
 
     expect(throttle.peek).to eq 0
     expect(throttle.increment!).to eq 1
     expect(throttle.increment!).to eq 2
     expect(throttle.increment!).to eq 3
     expect(throttle.increment!).to eq 4
-    expect(throttle.increment!).to eq 4
-    expect(throttle.peek).to eq 3
+    expect(throttle.increment!).to eq 5
+    expect(throttle.increment!).to eq 6
+    expect(throttle.increment!).to eq 6
+    expect(throttle.peek).to eq 5
     sleep(0.25)
     expect(throttle.peek).to eq 0
     expect(throttle.increment!).to eq 1
+    sleep(0.1)
+    expect(throttle.increment!).to eq 2
+    sleep(0.1)
     expect(throttle.increment!(2)).to eq 3
-    expect(throttle.increment!(2)).to eq 4
-    expect(throttle.peek).to eq 3
+    expect(throttle.increment!(2)).to eq 5
+    expect(throttle.peek).to eq 5
   end
 
   it "should track an extra call if pause to recover is set" do
