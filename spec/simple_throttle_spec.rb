@@ -92,6 +92,33 @@ describe SimpleThrottle do
     expect(throttle.allowed!).to eq true
   end
 
+  it "should never return a negative wait_time even when the list holds more than the limit" do
+    throttle = SimpleThrottle.new("test_simple_throttle", limit: 5, ttl: 0.5)
+    # increment! can push up to limit + 1 entries, more than `limit`.
+    expect(throttle.increment!(10)).to eq 6
+    expect(throttle.peek).to eq 6
+    wait = throttle.wait_time
+    expect(wait).to be >= 0.0
+    expect(wait).to be <= throttle.ttl
+  end
+
+  it "should reject a non-positive increment amount" do
+    throttle = SimpleThrottle.new("test_simple_throttle", limit: 5, ttl: 0.2)
+    expect { throttle.increment!(0) }.to raise_error(ArgumentError)
+    expect { throttle.increment!(-1) }.to raise_error(ArgumentError)
+    expect(throttle.peek).to eq 0
+  end
+
+  it "should coerce non-string names to frozen strings" do
+    throttle = SimpleThrottle.new(:test_symbol_name, limit: 1, ttl: 1)
+    expect(throttle.name).to eq "test_symbol_name"
+    expect(throttle.name).to be_frozen
+
+    throttle = SimpleThrottle.new(12345, limit: 1, ttl: 1)
+    expect(throttle.name).to eq "12345"
+    expect(throttle.name).to be_a(String)
+  end
+
   it "should be able to add global throttles" do
     SimpleThrottle.add(:test_1, limit: 4, ttl: 60)
     SimpleThrottle.add(:test_2, limit: 10, ttl: 3600, redis: Redis.new)
