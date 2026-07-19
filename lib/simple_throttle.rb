@@ -120,14 +120,14 @@ class SimpleThrottle
 
     def execute_lua_script(redis:, keys:, args:)
       client = redis
-      @script_sha_1 ||= client.script(:load, LUA_SCRIPT)
+      sha1 = @lock.synchronize { @script_sha_1 ||= client.script(:load, LUA_SCRIPT) }
       attempts = 0
 
       begin
-        client.evalsha(@script_sha_1, Array(keys), Array(args))
+        client.evalsha(sha1, Array(keys), Array(args))
       rescue Redis::CommandError => e
         if e.message.include?("NOSCRIPT") && attempts < 2
-          @script_sha_1 = client.script(:load, LUA_SCRIPT)
+          sha1 = @lock.synchronize { @script_sha_1 = client.script(:load, LUA_SCRIPT) }
           attempts += 1
           retry
         else
@@ -189,8 +189,9 @@ class SimpleThrottle
   #
   # @return [Integer]
   def peek
-    timestamps = redis_client.lrange(redis_key, 0, -1).collect(&:to_i)
-    min_timestamp = ((Time.now.to_f - ttl) * 1000).ceil
+    client = redis_client
+    timestamps = client.lrange(redis_key, 0, -1).collect(&:to_i)
+    min_timestamp = ((redis_server_time(client) - ttl) * 1000).ceil
     timestamps.count { |t| t > min_timestamp }
   end
 
@@ -200,18 +201,21 @@ class SimpleThrottle
   #
   # @return [Float]
   def wait_time
-    if peek < limit
+    client = redis_client
+    timestamps = client.lrange(redis_key, 0, -1).collect(&:to_i)
+    now = redis_server_time(client)
+    min_timestamp = ((now - ttl) * 1000).ceil
+    if timestamps.count { |t| t > min_timestamp } < limit
       0.0
     else
       # The entry that frees up a slot is the limit-th newest (index -limit),
       # not the head of the list, since the list can legitimately hold more
       # than `limit` entries (increment! and pause_to_recover both add extras).
-      oldest = redis_client.lindex(redis_key, -limit)
+      oldest = timestamps[-limit]
       return 0.0 if oldest.nil?
       first = oldest.to_f / 1000.0
-      delta = Time.now.to_f - first
-      wait = ttl - delta
-      wait < 0.0 ? 0.0 : wait
+      wait = ttl - (now - first)
+      wait.clamp(0.0, ttl)
     end
   end
 
@@ -227,6 +231,13 @@ class SimpleThrottle
 
   def redis_key
     "simple_throttle.#{name}"
+  end
+
+  # The Lua script stores timestamps from the Redis server clock, so reads
+  # must be measured against that same clock rather than the local one.
+  def redis_server_time(client)
+    seconds, microseconds = client.time
+    seconds.to_i + (microseconds.to_i / 1_000_000.0)
   end
 
   def add_request(amount, cleanup)

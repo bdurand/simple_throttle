@@ -102,6 +102,21 @@ describe SimpleThrottle do
     expect(wait).to be <= throttle.ttl
   end
 
+  it "should use the Redis server clock so local clock skew does not affect peek or wait_time" do
+    throttle = SimpleThrottle.new("test_simple_throttle", limit: 2, ttl: 10)
+    expect(throttle.allowed!).to eq true
+    expect(throttle.allowed!).to eq true
+
+    # Skew the local clock an hour ahead; reads use the Redis server clock
+    # and should be unaffected.
+    allow(Time).to receive(:now).and_return(Time.at(Time.now.to_f + 3600))
+
+    expect(throttle.peek).to eq 2
+    wait = throttle.wait_time
+    expect(wait).to be > 0.0
+    expect(wait).to be <= throttle.ttl
+  end
+
   it "should reject a non-positive increment amount" do
     throttle = SimpleThrottle.new("test_simple_throttle", limit: 5, ttl: 0.2)
     expect { throttle.increment!(0) }.to raise_error(ArgumentError)

@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Fixed
 
 - Fixed `wait_time` returning negative values when the throttle list held more than `limit` entries (possible after `increment!` or with `pause_to_recover`); it now reads the entry that actually frees a slot, handles a concurrently expired key, and never returns a value below zero.
-- Fixed the throttle timestamps to use the Redis server clock instead of the calling process clock so that entries are ordered consistently and cleanup works correctly when multiple clients with skewed clocks share a throttle.
+- Fixed the throttle timestamps to use the Redis server clock instead of the calling process clock so that entries are ordered consistently and cleanup works correctly when multiple clients with skewed clocks share a throttle. `peek` and `wait_time` also read the Redis server clock so clock skew cannot cause miscounts or wait times longer than the ttl; `wait_time` is additionally capped at the ttl.
 - Fixed `SimpleThrottle.new` to always store the name as a frozen `String` regardless of the argument type.
 
 ### Changed
