@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-require_relative "spec_helper"
+require "spec_helper"
 
-describe SimpleThrottle do
+RSpec.describe SimpleThrottle do
   it "should tell if a call is allowed" do
     throttle = SimpleThrottle.new("test_simple_throttle", limit: 3, ttl: 0.2)
     other_throttle = SimpleThrottle.new("test_simple_throttle_2", limit: 3, ttl: 0.1, redis: Redis.new)

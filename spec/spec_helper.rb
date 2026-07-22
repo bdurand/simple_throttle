@@ -7,7 +7,7 @@ require "bundler/setup" if File.exist?(ENV["BUNDLE_GEMFILE"])
 begin
   require "simplecov"
   SimpleCov.start do
-    add_filter ["/spec/"]
+    skip ["/spec/"]
   end
 rescue LoadError
 end
@@ -20,11 +20,11 @@ redis = Redis.new
 SimpleThrottle.set_redis(redis)
 
 RSpec.configure do |config|
-  config.expect_with :rspec do |c|
-    c.syntax = :expect
-  end
-
+  config.warnings = true
+  config.disable_monkey_patching!
+  config.default_formatter = "doc" if config.files_to_run.one?
   config.order = :random
+  Kernel.srand config.seed
 
   config.before do
     redis.flushdb
