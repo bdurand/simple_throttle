@@ -3,9 +3,12 @@
 require "spec_helper"
 
 RSpec.describe SimpleThrottle do
+  # Timing-sensitive specs use a ttl well above the scheduler's sleep overshoot
+  # (a few ms per sleep, which accumulates). Keep the sleep-to-ttl ratios if you
+  # change these numbers; shrinking the ttl makes the expiry boundaries flaky.
   it "should tell if a call is allowed" do
-    throttle = SimpleThrottle.new("test_simple_throttle", limit: 3, ttl: 0.2)
-    other_throttle = SimpleThrottle.new("test_simple_throttle_2", limit: 3, ttl: 0.1, redis: Redis.new)
+    throttle = SimpleThrottle.new("test_simple_throttle", limit: 3, ttl: 0.8)
+    other_throttle = SimpleThrottle.new("test_simple_throttle_2", limit: 3, ttl: 0.4, redis: Redis.new)
 
     expect(throttle.peek).to eq 0
     expect(throttle.allowed!).to eq true
@@ -27,17 +30,17 @@ RSpec.describe SimpleThrottle do
     expect(other_throttle.peek).to eq 1
     expect(other_throttle.wait_time).to eq 0.0
 
-    sleep(0.3)
+    sleep(1.2)
 
     expect(other_throttle.peek).to eq 0
     expect(throttle.allowed!).to eq true
-    sleep(0.06)
+    sleep(0.24)
     expect(throttle.allowed!).to eq true
-    sleep(0.06)
+    sleep(0.24)
     expect(throttle.allowed!).to eq true
-    sleep(0.06)
+    sleep(0.24)
     expect(throttle.allowed!).to eq false
-    sleep(0.06)
+    sleep(0.24)
     expect(throttle.peek).to eq 2
     expect(throttle.allowed!).to eq true
     expect(throttle.allowed!).to eq false
@@ -68,27 +71,27 @@ RSpec.describe SimpleThrottle do
   end
 
   it "should track an extra call if pause to recover is set" do
-    throttle = SimpleThrottle.new("test_simple_throttle", limit: 3, ttl: 0.1, pause_to_recover: true)
+    throttle = SimpleThrottle.new("test_simple_throttle", limit: 3, ttl: 0.5, pause_to_recover: true)
 
     expect(throttle.peek).to eq 0
     expect(throttle.allowed!).to eq true
-    sleep(0.02)
+    sleep(0.1)
     expect(throttle.allowed!).to eq true
-    sleep(0.02)
+    sleep(0.1)
     expect(throttle.allowed!).to eq true
-    sleep(0.02)
+    sleep(0.1)
     expect(throttle.allowed!).to eq false
     expect(throttle.peek).to eq 4
-    sleep(0.02)
+    sleep(0.1)
     expect(throttle.allowed!).to eq false
     expect(throttle.peek).to eq 4
-    sleep(0.02)
+    sleep(0.1)
     expect(throttle.allowed!).to eq false
     expect(throttle.peek).to eq 4
-    sleep(0.02)
+    sleep(0.1)
     expect(throttle.allowed!).to eq false
     expect(throttle.peek).to eq 4
-    sleep(0.04)
+    sleep(0.2)
     expect(throttle.allowed!).to eq true
   end
 
