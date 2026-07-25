@@ -34,5 +34,5 @@ Gem::Specification.new do |spec|
 
   spec.add_dependency "redis"
 
-  spec.required_ruby_version = ">= 2.5"
+  spec.required_ruby_version = ">= 2.6"
 end
