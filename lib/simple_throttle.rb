@@ -57,6 +57,9 @@ class SimpleThrottle
   LUA
 
   @lock = Mutex.new
+  @redis_client = nil
+  @script_sha_1 = nil
+  @throttles = {}.freeze
 
   class << self
     # Add a global throttle that can be referenced later with the [] method.
@@ -75,9 +78,9 @@ class SimpleThrottle
       @lock.synchronize do
         # Copy-on-write so that lock-free readers in `[]` always see a
         # fully-populated, immutable hash and never a partially rehashed one.
-        throttles = (defined?(@throttles) && @throttles) ? @throttles.dup : {}
+        throttles = @throttles.dup
         throttles[name.to_s] = new(name, limit: limit, ttl: ttl, pause_to_recover: pause_to_recover, redis: redis)
-        @throttles = throttles
+        @throttles = throttles.freeze
       end
     end
 
@@ -86,7 +89,8 @@ class SimpleThrottle
     # @param name [String, Symbol] name of the throttle
     # @return [SimpleThrottle]
     def [](name)
-      throttles = @throttles if defined?(@throttles)
+      # Assign then read for thread safety.
+      throttles = @throttles
       throttles[name.to_s] if throttles
     end
 
@@ -120,7 +124,8 @@ class SimpleThrottle
 
     def execute_lua_script(redis:, keys:, args:)
       client = redis
-      sha1 = @lock.synchronize { @script_sha_1 ||= client.script(:load, LUA_SCRIPT) }
+      sha1 = @script_sha_1
+      sha1 ||= @lock.synchronize { @script_sha_1 ||= client.script(:load, LUA_SCRIPT) }
       attempts = 0
 
       begin

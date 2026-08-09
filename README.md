@@ -78,7 +78,7 @@ end
 
 ### Redis requirement
 
-The `redis` gem version 4.6 or greater is required. Versions 4.6, 5.x, and 6.x are all supported and tested.
+The `redis` gem version 4.5 or greater is required. Versions 4.5, 5.x, and 6.x are all supported and tested.
 
 Redis server 3.2 or greater is required. The Lua script that maintains the throttle reads the server clock and then writes to the throttle list, which is only allowed under effects replication.
 
