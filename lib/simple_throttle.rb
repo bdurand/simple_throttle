@@ -189,9 +189,8 @@ class SimpleThrottle
   #
   # @return [Integer]
   def peek
-    client = redis_client
-    timestamps = client.lrange(redis_key, 0, -1).collect(&:to_i)
-    min_timestamp = ((redis_server_time(client) - ttl) * 1000).ceil
+    timestamps, now = timestamps_with_server_time
+    min_timestamp = ((now - ttl) * 1000).ceil
     timestamps.count { |t| t > min_timestamp }
   end
 
@@ -201,9 +200,7 @@ class SimpleThrottle
   #
   # @return [Float]
   def wait_time
-    client = redis_client
-    timestamps = client.lrange(redis_key, 0, -1).collect(&:to_i)
-    now = redis_server_time(client)
+    timestamps, now = timestamps_with_server_time
     min_timestamp = ((now - ttl) * 1000).ceil
     if timestamps.count { |t| t > min_timestamp } < limit
       0.0
@@ -234,10 +231,19 @@ class SimpleThrottle
   end
 
   # The Lua script stores timestamps from the Redis server clock, so reads
-  # must be measured against that same clock rather than the local one.
-  def redis_server_time(client)
-    seconds, microseconds = client.time
-    seconds.to_i + (microseconds.to_i / 1_000_000.0)
+  # must be measured against that same clock rather than the local one. Both
+  # values are fetched in a single pipeline so that reading the clock doesn't
+  # cost an extra round trip.
+  #
+  # @return [Array(Array<Integer>, Float)] the tracked timestamps in
+  #   milliseconds and the current Redis server time in seconds.
+  def timestamps_with_server_time
+    timestamps, time = redis_client.pipelined do |pipeline|
+      pipeline.lrange(redis_key, 0, -1)
+      pipeline.time
+    end
+    seconds, microseconds = time
+    [timestamps.collect(&:to_i), seconds.to_i + (microseconds.to_i / 1_000_000.0)]
   end
 
   def add_request(amount, cleanup)

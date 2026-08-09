@@ -14,6 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Throttle time is now measured entirely by the Redis server clock. Manipulating time in the calling process (i.e. with Timecop or by stubbing `Time.now`) no longer has any effect on throttles; tests need to use a short `ttl` and actually sleep. Reading the server clock does not add a round trip; `peek` and `wait_time` pipeline it with the read of the timestamp list.
 - `increment!` now raises `ArgumentError` when given a non-positive amount instead of corrupting the count.
 - Hardened thread safety of the global throttle registry and lazily-initialized Redis client.
 
