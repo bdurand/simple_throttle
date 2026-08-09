@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## 1.1.2
+
+### Fixed
+
+- Fixed `wait_time` returning negative values when the throttle list held more than `limit` entries (possible after `increment!` or with `pause_to_recover`); it now reads the entry that actually frees a slot, handles a concurrently expired key, and never returns a value below zero.
+- Fixed the throttle timestamps to use the Redis server clock instead of the calling process clock so that entries are ordered consistently and cleanup works correctly when multiple clients with skewed clocks share a throttle. `peek` and `wait_time` also read the Redis server clock so clock skew cannot cause miscounts or wait times longer than the ttl; `wait_time` is additionally capped at the ttl.
+- Fixed `SimpleThrottle.new` to always store the name as a frozen `String` regardless of the argument type.
+
+### Changed
+
+- Throttle time is now measured entirely by the Redis server clock. Manipulating time in the calling process (i.e. with Timecop or by stubbing `Time.now`) no longer has any effect on throttles; tests need to use a short `ttl` and actually sleep. Reading the server clock does not add a round trip; `peek` and `wait_time` pipeline it with the read of the timestamp list.
+- `increment!` now raises `ArgumentError` when given a non-positive amount instead of corrupting the count.
+- Hardened thread safety of the global throttle registry and lazily-initialized Redis client.
+
 ## 1.1.1
 
 ### Fixed

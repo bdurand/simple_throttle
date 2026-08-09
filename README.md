@@ -1,8 +1,8 @@
 # Simple Throttle
 
 [![Continuous Integration](https://github.com/bdurand/simple_throttle/actions/workflows/continuous_integration.yml/badge.svg)](https://github.com/bdurand/simple_throttle/actions/workflows/continuous_integration.yml)
-[![Regression Test](https://github.com/bdurand/simple_throttle/actions/workflows/regression_test.yml/badge.svg)](https://github.com/bdurand/simple_throttle/actions/workflows/regression_test.yml)
 [![Ruby Style Guide](https://img.shields.io/badge/code_style-standard-brightgreen.svg)](https://github.com/testdouble/standard)
+[![Gem Version](https://badge.fury.io/rb/simple_throttle.svg)](https://badge.fury.io/rb/simple_throttle)
 
 This gem provides a very simple throttling mechanism backed by Redis for limiting access to a resource. The throttle can be thought of as a limit on the number of calls in a set time frame (i.e. 100 calls per hour).
 
@@ -78,7 +78,29 @@ end
 
 ### Redis requirement
 
-Redis server 2.6 or greater is required for this code.
+The `redis` gem version 4.5 or greater is required. Versions 4.5, 5.x, and 6.x are all supported and tested.
+
+Redis server 3.2 or greater is required. The Lua script that maintains the throttle reads the server clock and then writes to the throttle list, which is only allowed under effects replication.
+
+### Time is measured by the Redis server clock
+
+All throttle timestamps come from the Redis server's clock rather than the clock of the process calling the throttle. This is deliberate: a throttle is usually shared by many processes, and if each one stamped entries with its own clock, then clock skew between them would corrupt the ordering of the list and cause entries to expire too early or too late. Using a single clock means every client agrees on the time window no matter how skewed their local clocks are.
+
+There are two consequences worth knowing about:
+
+- **Manipulating time in tests has no effect on throttles.** Tools like [Timecop](https://github.com/travisjeffery/timecop), `ActiveSupport::Testing::TimeHelpers`, or stubbing `Time.now` only change the clock inside your Ruby process. The Redis server is a separate process and keeps reporting the real time, so freezing or traveling through time will not expire throttle entries or change what `wait_time` returns. To test throttle expiration, create the throttle with a very short `ttl` and actually `sleep`:
+
+  ```ruby
+  throttle = SimpleThrottle.new("test", limit: 1, ttl: 0.1)
+  expect(throttle.allowed!).to eq true
+  expect(throttle.allowed!).to eq false
+  sleep(0.15)
+  expect(throttle.allowed!).to eq true
+  ```
+
+  Use `reset!` to clear a throttle between tests.
+
+- **Reading the server clock does not cost an extra round trip.** `allowed!` and `increment!` read the clock inside the Lua script they already run, and `peek` and `wait_time` pipeline the clock read together with the read of the timestamp list. Every operation is still a single round trip to Redis.
 
 ## Installation
 

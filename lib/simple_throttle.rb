@@ -11,17 +11,23 @@ class SimpleThrottle
   # then the current entry will be added. The list is marked to expire with the oldest entry so
   # there's no need to cleanup the lists.
   LUA_SCRIPT = <<~LUA
+    redis.replicate_commands()
+
     local list_key = KEYS[1]
     local limit = tonumber(ARGV[1])
     local ttl = tonumber(ARGV[2])
-    local now = ARGV[3]
-    local pause_to_recover = tonumber(ARGV[4])
-    local amount = tonumber(ARGV[5])
-    local cleanup = tonumber(ARGV[6])
+    local pause_to_recover = tonumber(ARGV[3])
+    local amount = tonumber(ARGV[4])
+    local cleanup = tonumber(ARGV[5])
+
+    -- Use the Redis server clock so timestamps are consistent and monotonic
+    -- across all clients regardless of individual machine clock skew.
+    local time = redis.call('time')
+    local now = (tonumber(time[1]) * 1000) + math.floor(tonumber(time[2]) / 1000)
 
     local size = redis.call('llen', list_key)
     if size >= limit or (cleanup > 0 and size > 0) then
-      local expired = tonumber(now) - ttl
+      local expired = now - ttl
       while size > 0 do
         local t = redis.call('lpop', list_key)
         if tonumber(t) > expired then
@@ -51,6 +57,9 @@ class SimpleThrottle
   LUA
 
   @lock = Mutex.new
+  @redis_client = nil
+  @script_sha_1 = nil
+  @throttles = {}.freeze
 
   class << self
     # Add a global throttle that can be referenced later with the [] method.
@@ -63,12 +72,15 @@ class SimpleThrottle
     # @param pause_to_recover [Boolean] require processes calling the throttle
     #   to pause at least temporarily before freeing up the throttle. If this is true,
     #   then a throttle called constantly with no pauses will never free up.
-    # @param redis [Redis, Proc] Redis instance to use or a Proc that yields a Redos instance
+    # @param redis [Redis, Proc] Redis instance to use or a Proc that yields a Redis instance
     # @return [void]
     def add(name, ttl:, limit:, pause_to_recover: false, redis: nil)
       @lock.synchronize do
-        @throttles ||= {}
-        @throttles[name.to_s] = new(name, limit: limit, ttl: ttl, pause_to_recover: pause_to_recover, redis: redis)
+        # Copy-on-write so that lock-free readers in `[]` always see a
+        # fully-populated, immutable hash and never a partially rehashed one.
+        throttles = @throttles.dup
+        throttles[name.to_s] = new(name, limit: limit, ttl: ttl, pause_to_recover: pause_to_recover, redis: redis)
+        @throttles = throttles.freeze
       end
     end
 
@@ -77,9 +89,9 @@ class SimpleThrottle
     # @param name [String, Symbol] name of the throttle
     # @return [SimpleThrottle]
     def [](name)
-      if defined?(@throttles) && @throttles
-        @throttles[name.to_s]
-      end
+      # Assign then read for thread safety.
+      throttles = @throttles
+      throttles[name.to_s] if throttles
     end
 
     # Set the Redis instance to use for maintaining the throttle. This can either be set
@@ -99,11 +111,12 @@ class SimpleThrottle
     #
     # @return [Redis]
     def redis
-      @redis_client ||= Redis.new
-      if @redis_client.is_a?(Proc)
-        @redis_client.call
+      @lock.synchronize { @redis_client ||= Redis.new } unless @redis_client
+      client = @redis_client
+      if client.is_a?(Proc)
+        client.call
       else
-        @redis_client
+        client
       end
     end
 
@@ -111,14 +124,15 @@ class SimpleThrottle
 
     def execute_lua_script(redis:, keys:, args:)
       client = redis
-      @script_sha_1 ||= client.script(:load, LUA_SCRIPT)
+      sha1 = @script_sha_1
+      sha1 ||= @lock.synchronize { @script_sha_1 ||= client.script(:load, LUA_SCRIPT) }
       attempts = 0
 
       begin
-        client.evalsha(@script_sha_1, Array(keys), Array(args))
+        client.evalsha(sha1, Array(keys), Array(args))
       rescue Redis::CommandError => e
         if e.message.include?("NOSCRIPT") && attempts < 2
-          @script_sha_1 = client.script(:load, LUA_SCRIPT)
+          sha1 = @lock.synchronize { @script_sha_1 = client.script(:load, LUA_SCRIPT) }
           attempts += 1
           retry
         else
@@ -138,10 +152,9 @@ class SimpleThrottle
   # @param pause_to_recover [Boolean] require processes calling the throttle
   #   to pause at least temporarily before freeing up the throttle. If this is true,
   #   then a throttle called constantly with no pauses will never free up.
-  # @param redis [Redis, Proc] Redis instance to use or a Proc that yields a Redos instance
+  # @param redis [Redis, Proc] Redis instance to use or a Proc that yields a Redis instance
   def initialize(name, ttl:, limit:, pause_to_recover: false, redis: nil)
-    @name = name.to_s
-    @name = name.dup.freeze unless name.frozen?
+    @name = name.to_s.dup.freeze
     @limit = limit.to_i
     @ttl = ttl.to_f
     @pause_to_recover = !!pause_to_recover
@@ -161,9 +174,12 @@ class SimpleThrottle
   # how the throttle is implemented in Redis, the return value will always max
   # out at the throttle limit + 1 or, if the pause to recover option is set, limit + 2.
   #
-  # @param amount [Integer] amount to increment the throttle by
+  # @param amount [Integer] amount to increment the throttle by (must be positive)
   # @return [Integer]
   def increment!(amount = 1)
+    amount = amount.to_i
+    raise ArgumentError, "amount must be a positive integer" if amount < 1
+
     add_request(amount, true)
   end
 
@@ -178,8 +194,8 @@ class SimpleThrottle
   #
   # @return [Integer]
   def peek
-    timestamps = redis_client.lrange(redis_key, 0, -1).collect(&:to_i)
-    min_timestamp = ((Time.now.to_f - ttl) * 1000).ceil
+    timestamps, now = timestamps_with_server_time
+    min_timestamp = ((now - ttl) * 1000).ceil
     timestamps.count { |t| t > min_timestamp }
   end
 
@@ -189,13 +205,19 @@ class SimpleThrottle
   #
   # @return [Float]
   def wait_time
-    if peek < limit
+    timestamps, now = timestamps_with_server_time
+    min_timestamp = ((now - ttl) * 1000).ceil
+    if timestamps.count { |t| t > min_timestamp } < limit
       0.0
     else
-      first = redis_client.lindex(redis_key, 0).to_f / 1000.0
-      delta = Time.now.to_f - first
-      delta = 0.0 if delta < 0
-      ttl - delta
+      # The entry that frees up a slot is the limit-th newest (index -limit),
+      # not the head of the list, since the list can legitimately hold more
+      # than `limit` entries (increment! and pause_to_recover both add extras).
+      oldest = timestamps[-limit]
+      return 0.0 if oldest.nil?
+      first = oldest.to_f / 1000.0
+      wait = ttl - (now - first)
+      wait.clamp(0.0, ttl)
     end
   end
 
@@ -213,15 +235,30 @@ class SimpleThrottle
     "simple_throttle.#{name}"
   end
 
+  # The Lua script stores timestamps from the Redis server clock, so reads
+  # must be measured against that same clock rather than the local one. Both
+  # values are fetched in a single pipeline so that reading the clock doesn't
+  # cost an extra round trip.
+  #
+  # @return [Array(Array<Integer>, Float)] the tracked timestamps in
+  #   milliseconds and the current Redis server time in seconds.
+  def timestamps_with_server_time
+    timestamps, time = redis_client.pipelined do |pipeline|
+      pipeline.lrange(redis_key, 0, -1)
+      pipeline.time
+    end
+    seconds, microseconds = time
+    [timestamps.collect(&:to_i), seconds.to_i + (microseconds.to_i / 1_000_000.0)]
+  end
+
   def add_request(amount, cleanup)
     pause_to_recover_arg = (@pause_to_recover ? 1 : 0)
-    time_ms = (Time.now.to_f * 1000).round
     ttl_ms = (ttl * 1000).ceil
     self.class.send(
       :execute_lua_script,
       redis: redis_client,
       keys: [redis_key],
-      args: [limit, ttl_ms, time_ms, pause_to_recover_arg, amount, (cleanup ? 1 : 0)]
+      args: [limit, ttl_ms, pause_to_recover_arg, amount, (cleanup ? 1 : 0)]
     )
   end
 end
