@@ -32,7 +32,7 @@ Gem::Specification.new do |spec|
 
   spec.require_paths = ["lib"]
 
-  spec.add_dependency "redis"
+  spec.add_dependency "redis", ">= 4.5"
 
   spec.required_ruby_version = ">= 2.6"
 end

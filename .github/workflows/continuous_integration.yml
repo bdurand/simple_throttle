@@ -32,7 +32,12 @@ jobs:
           - ruby: "ruby"
             standardrb: true
             yard: true
+          - ruby: "4.0"
+            appraisal: "redis_6"
+          - ruby: "3.4"
+            appraisal: "redis_5"
           - ruby: "2.7"
+            appraisal: "redis_4.5"
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
